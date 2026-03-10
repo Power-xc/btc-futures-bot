@@ -15,25 +15,41 @@ import logging
 import ccxt
 
 from config.settings import get_api_credentials, is_testnet
-from config.constants import SYMBOL, LEVERAGE
+from config.constants import LEVERAGE
 
 logger = logging.getLogger(__name__)
 
 FUTURES_SYMBOL = "BTC/USDT:USDT"   # ccxt USD-M Futures 심볼 형식
 
 
-def create_client() -> ccxt.binanceusdm:
-    """Binance USD-M Futures 클라이언트 생성 (실거래 API)"""
+def create_client() -> ccxt.binanceusdm | ccxt.binance:
+    """
+    Binance 클라이언트 생성
+
+    USE_TESTNET=true  → testnet.binance.vision (현물 테스트넷)
+                        dry-run + 시그널 테스트용. 캔들/잔고 조회 가능.
+    USE_TESTNET=false → Binance USD-M Futures 실거래 API
+    """
     creds = get_api_credentials()
-    exchange = ccxt.binanceusdm({
+    opts = {
         "apiKey":          creds["api_key"],
         "secret":          creds["api_secret"],
         "enableRateLimit": True,
-        "options": {
-            "adjustForTimeDifference": True,
-        },
-    })
-    logger.info("[클라이언트] Binance USD-M Futures 연결")
+        "options":         {"adjustForTimeDifference": True},
+    }
+
+    if is_testnet():
+        exchange = ccxt.binance(opts)
+        exchange.urls["api"] = {
+            "public":  "https://testnet.binance.vision/api",
+            "private": "https://testnet.binance.vision/api",
+        }
+        logger.info("[클라이언트] 테스트넷 모드 (testnet.binance.vision)")
+        logger.warning("[클라이언트] 선물 주문 불가 — --dry-run 으로 실행하세요")
+    else:
+        exchange = ccxt.binanceusdm(opts)
+        logger.info("[클라이언트] 실거래 선물 모드 ★")
+
     return exchange
 
 
@@ -117,7 +133,7 @@ def set_margin_mode(exchange: ccxt.binanceusdm, mode: str = "isolated") -> bool:
         return True
 
 
-def fetch_closed_candles(exchange: ccxt.binanceusdm,
+def fetch_closed_candles(exchange,
                          timeframe: str = "5m",
                          limit: int = 250) -> list:
     """
@@ -127,8 +143,10 @@ def fetch_closed_candles(exchange: ccxt.binanceusdm,
         [{"timestamp": ms, "open": float, "high": float,
           "low": float, "close": float, "volume": float}, ...]
     """
+    # 테스트넷(현물)은 "BTC/USDT", 실거래(선물)는 "BTC/USDT:USDT"
+    symbol = "BTC/USDT" if is_testnet() else FUTURES_SYMBOL
     try:
-        raw = exchange.fetch_ohlcv(FUTURES_SYMBOL, timeframe, limit=limit + 1)
+        raw = exchange.fetch_ohlcv(symbol, timeframe, limit=limit + 1)
         if not raw or len(raw) < 2:
             return []
         # 마지막 캔들은 현재 진행 중 → 제외
