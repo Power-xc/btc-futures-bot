@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 import ccxt
 
+import notifications.telegram as tg
 from exchange.client import (
     create_client, check_connection,
     set_leverage, set_margin_mode,
@@ -100,6 +101,8 @@ def _handle_signal(exchange: ccxt.binanceusdm,
     price = candle["close"]
     changed = False
 
+    balance = get_usdt_balance(exchange)
+
     # ── 신규 진입 ────────────────────────────────────────────
     if sig == Signal.ENTER_CONTRARIAN_SHORT and not state.is_open():
         order = enter_short(exchange, price, level=0)
@@ -111,6 +114,7 @@ def _handle_signal(exchange: ccxt.binanceusdm,
             state.add_entry(price, MARTINGALE_AMOUNTS[0], qty)
             changed = True
             logger.info(f"[시그널] {reason}")
+            tg.notify_enter("CONTRARIAN_SHORT", 1, price, MARTINGALE_AMOUNTS[0], balance)
 
     elif sig == Signal.ENTER_CONTRARIAN_LONG and not state.is_open():
         order = enter_long(exchange, price, level=0)
@@ -122,6 +126,7 @@ def _handle_signal(exchange: ccxt.binanceusdm,
             state.add_entry(price, MARTINGALE_AMOUNTS[0], qty)
             changed = True
             logger.info(f"[시그널] {reason}")
+            tg.notify_enter("CONTRARIAN_LONG", 1, price, MARTINGALE_AMOUNTS[0], balance)
 
     elif sig == Signal.ENTER_TREND_LONG and not state.is_open():
         order = enter_long(exchange, price, level=0)
@@ -131,48 +136,56 @@ def _handle_signal(exchange: ccxt.binanceusdm,
             state.martingale_level = 1
             state.entries.clear()
             state.add_entry(price, MARTINGALE_AMOUNTS[0], qty)
-            # 추세 롱 손절가: 신호 캔들 2개 전 저점 (최소 0.5% 아래)
             ref = candles[max(0, idx - 2)]
             min_stop = price * (1 - TREND_LONG_MIN_STOP_PCT)
             state.trend_long_stop = min(ref["low"], min_stop)
             changed = True
             logger.info(f"[시그널] {reason} | 손절: ${state.trend_long_stop:,.0f}")
+            tg.notify_enter("TREND_LONG", 1, price, MARTINGALE_AMOUNTS[0], balance)
 
     # ── 추매 ─────────────────────────────────────────────────
     elif sig == Signal.ADD_SHORT and state.position_side == "CONTRARIAN_SHORT":
         if state.martingale_level < MAX_MARTINGALE_LEVEL:
-            order = enter_short(exchange, price, level=state.martingale_level)
+            lv = state.martingale_level
+            order = enter_short(exchange, price, level=lv)
             if order:
-                qty = float(order.get("filled", 0) or
-                            MARTINGALE_AMOUNTS[state.martingale_level] / price)
-                state.add_entry(price, MARTINGALE_AMOUNTS[state.martingale_level], qty)
+                qty = float(order.get("filled", 0) or MARTINGALE_AMOUNTS[lv] / price)
+                state.add_entry(price, MARTINGALE_AMOUNTS[lv], qty)
                 state.martingale_level += 1
                 changed = True
+                tg.notify_enter("CONTRARIAN_SHORT", lv + 1, price, MARTINGALE_AMOUNTS[lv], balance)
 
     elif sig == Signal.ADD_LONG and state.position_side == "CONTRARIAN_LONG":
         if state.martingale_level < MAX_MARTINGALE_LEVEL:
-            order = enter_long(exchange, price, level=state.martingale_level)
+            lv = state.martingale_level
+            order = enter_long(exchange, price, level=lv)
             if order:
-                qty = float(order.get("filled", 0) or
-                            MARTINGALE_AMOUNTS[state.martingale_level] / price)
-                state.add_entry(price, MARTINGALE_AMOUNTS[state.martingale_level], qty)
+                qty = float(order.get("filled", 0) or MARTINGALE_AMOUNTS[lv] / price)
+                state.add_entry(price, MARTINGALE_AMOUNTS[lv], qty)
                 state.martingale_level += 1
                 changed = True
+                tg.notify_enter("CONTRARIAN_LONG", lv + 1, price, MARTINGALE_AMOUNTS[lv], balance)
 
     # ── 분할 익절 ─────────────────────────────────────────────
     elif sig == Signal.PARTIAL_CLOSE and state.is_open():
+        from config.constants import PARTIAL_CLOSE_RATIO
+        avg = state.avg_price()
         order = close_partial(exchange, price, state.position_side)
         if order:
             for e in state.entries:
-                from config.constants import PARTIAL_CLOSE_RATIO
                 e["qty"]  *= (1 - PARTIAL_CLOSE_RATIO)
                 e["usdt"] *= (1 - PARTIAL_CLOSE_RATIO)
             changed = True
             logger.info(f"[시그널] {reason}")
+            tg.notify_partial_close(state.position_side, price, 0)  # PnL 근사값
 
     # ── 완전 익절 ─────────────────────────────────────────────
     elif sig == Signal.FULL_CLOSE and state.is_open():
+        avg = state.avg_price()
+        is_long = state.position_side in ("CONTRARIAN_LONG", "TREND_LONG")
+        pnl_est = (price - avg) * state.total_qty() if is_long else (avg - price) * state.total_qty()
         close_full(exchange, price, reason)
+        tg.notify_close(state.position_side, avg, price, pnl_est, balance, reason)
         state.reset()
         clear_state()
         changed = True
@@ -194,6 +207,9 @@ def run(exchange: ccxt.binanceusdm, dry_run: bool = False):
     logger.info("  BTC 선물 라이브 트레이딩 시작")
     logger.info(f"  {'[DRY RUN]' if dry_run else '[실거래 모드]'}")
     logger.info("=" * 60)
+
+    from config.settings import is_testnet
+    tg.notify_start(is_testnet(), dry_run)
 
     # 시작 초기화
     if not dry_run:
@@ -240,7 +256,11 @@ def run(exchange: ccxt.binanceusdm, dry_run: bool = False):
                     f"[손절] 추세롱 저점 ${state.trend_long_stop:,.0f} 이탈 | 현재가: ${price:,.0f}"
                 )
                 if not dry_run:
+                    avg = state.avg_price()
+                    pnl_est = (price - avg) * state.total_qty()
                     close_full(exchange, price, "trend_stop_loss")
+                    tg.notify_close("TREND_LONG", avg, price, pnl_est,
+                                    get_usdt_balance(exchange), "손절")
                     state.reset()
                     clear_state()
                 else:
@@ -280,13 +300,17 @@ def run(exchange: ccxt.binanceusdm, dry_run: bool = False):
 
         except KeyboardInterrupt:
             logger.info("\n[종료] Ctrl+C — 루프 종료")
+            tg.notify_stop()
             break
         except ccxt.NetworkError as e:
             logger.error(f"[네트워크] 오류: {e} — 30초 후 재시도")
+            tg.notify_error(f"네트워크 오류: {e}")
             time.sleep(30)
         except ccxt.ExchangeError as e:
             logger.error(f"[거래소] 오류: {e} — 60초 후 재시도")
+            tg.notify_error(f"거래소 오류: {e}")
             time.sleep(60)
         except Exception as e:
             logger.exception(f"[예외] {e} — 30초 후 재시도")
+            tg.notify_error(f"예외 발생: {e}")
             time.sleep(30)
