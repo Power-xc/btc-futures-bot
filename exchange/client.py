@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 FUTURES_SYMBOL = "BTC/USDT:USDT"   # ccxt USD-M Futures 심볼 형식
 
 
-def create_client() -> ccxt.binanceusdm | ccxt.binance:
+def create_client():
     """
     Binance 클라이언트 생성
 
@@ -77,7 +77,7 @@ def get_usdt_balance(exchange: ccxt.binanceusdm) -> float:
         return 0.0
 
 
-def get_position(exchange: ccxt.binanceusdm) -> dict | None:
+def get_position(exchange: ccxt.binanceusdm) -> dict:
     """
     현재 BTC/USDT 포지션 반환
 
@@ -172,7 +172,7 @@ def place_market_order(exchange: ccxt.binanceusdm,
                        side: str,
                        usdt_amount: float,
                        current_price: float,
-                       reduce_only: bool = False) -> dict | None:
+                       reduce_only: bool = False) -> dict:
     """
     시장가 주문 실행
 

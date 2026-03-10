@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def enter_long(exchange: ccxt.binanceusdm,
                current_price: float,
-               level: int = 0) -> dict | None:
+               level: int = 0) -> dict:
     """
     롱 진입 / 추매
 
@@ -47,7 +47,7 @@ def enter_long(exchange: ccxt.binanceusdm,
 
 def enter_short(exchange: ccxt.binanceusdm,
                 current_price: float,
-                level: int = 0) -> dict | None:
+                level: int = 0) -> dict:
     """
     숏 진입 / 추매
 
@@ -74,7 +74,7 @@ def enter_short(exchange: ccxt.binanceusdm,
 
 def close_partial(exchange: ccxt.binanceusdm,
                   current_price: float,
-                  position_side: str) -> dict | None:
+                  position_side: str) -> dict:
     """
     분할 익절 (PARTIAL_CLOSE_RATIO 비율만큼 청산)
 
