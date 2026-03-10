@@ -18,6 +18,7 @@ from config.constants import (
     TREND_LONG_MIN_STOP_PCT,
 )
 from lib.volume import precompute_vol_avg
+from lib.ema import precompute_ema
 
 logger = logging.getLogger(__name__)
 
@@ -129,15 +130,8 @@ def run_backtest(
     # ── 레짐 EMA 사전 계산 (전체 캔들 한 번만) ───────────────
     # EMA50 / EMA200 (200봉 ≈ 16시간) 로 단기 추세 판단
     # 단기 하락추세: price < EMA50 < EMA200
-    def _precompute_ema(period: int) -> list:
-        k = 2 / (period + 1)
-        ema_vals = [candles[0]["close"]]
-        for c in candles[1:]:
-            ema_vals.append(c["close"] * k + ema_vals[-1] * (1 - k))
-        return ema_vals
-
-    ema50  = _precompute_ema(50)
-    ema200 = _precompute_ema(200)
+    ema50  = precompute_ema(candles, 50)
+    ema200 = precompute_ema(candles, 200)
     macro_down_flags = [
         (candles[i]["close"] < ema50[i] and ema50[i] < ema200[i])
         for i in range(len(candles))

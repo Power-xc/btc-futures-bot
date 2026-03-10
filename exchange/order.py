@@ -13,7 +13,7 @@ from exchange.client import (
     place_market_order, get_usdt_balance,
     get_position, close_all_positions,
 )
-from config.constants import MARTINGALE_PCTS, MAX_MARTINGALE_LEVEL, PARTIAL_CLOSE_RATIO
+from config.constants import MARTINGALE_PCTS, MAX_MARTINGALE_LEVEL, PARTIAL_CLOSE_RATIO, MAX_ENTRY_CAPITAL_RATIO
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def enter_long(exchange: ccxt.binanceusdm,
     balance = get_usdt_balance(exchange)
     usdt = balance * MARTINGALE_PCTS[level]
 
-    if usdt > balance * 0.95:
+    if usdt > balance * MAX_ENTRY_CAPITAL_RATIO:
         logger.warning(f"[진입] 잔고 부족 (필요: ${usdt:.0f}, 보유: ${balance:.0f}) → 건너뜀")
         return None
 
@@ -62,7 +62,7 @@ def enter_short(exchange: ccxt.binanceusdm,
     balance = get_usdt_balance(exchange)
     usdt = balance * MARTINGALE_PCTS[level]
 
-    if usdt > balance * 0.95:
+    if usdt > balance * MAX_ENTRY_CAPITAL_RATIO:
         logger.warning(f"[진입] 잔고 부족 (필요: ${usdt:.0f}, 보유: ${balance:.0f}) → 건너뜀")
         return None
 

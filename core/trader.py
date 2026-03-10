@@ -27,6 +27,7 @@ from exchange.order import enter_long, enter_short, close_partial, close_full
 from core.state import PositionState, load_state, save_state, clear_state
 from strategy.signals import generate_signal, Signal
 from lib.volume import precompute_vol_avg
+from lib.ema import precompute_ema
 from config.constants import (
     LEVERAGE, BACKTEST_MIN_CANDLES, BACKTEST_WINDOW_SIZE,
     MARTINGALE_PCTS, MAX_MARTINGALE_LEVEL,
@@ -53,14 +54,6 @@ def _wait_for_next_candle():
     wait = next_close - now + 3   # +3초 여유 (캔들 확정 대기)
     logger.info(f"[대기] 다음 캔들 마감까지 {wait}초")
     time.sleep(wait)
-
-
-def _precompute_ema(candles: list, period: int) -> list:
-    k = 2 / (period + 1)
-    ema = [candles[0]["close"]]
-    for c in candles[1:]:
-        ema.append(c["close"] * k + ema[-1] * (1 - k))
-    return ema
 
 
 def _is_macro_downtrend(candles: list, idx: int,
@@ -92,7 +85,8 @@ def _handle_signal(exchange: ccxt.binanceusdm,
                    state: PositionState,
                    candle: dict,
                    candles: list,
-                   idx: int) -> bool:
+                   idx: int,
+                   balance: float) -> bool:
     """
     시그널 처리 → 주문 실행 + 상태 업데이트
 
@@ -100,8 +94,6 @@ def _handle_signal(exchange: ccxt.binanceusdm,
     """
     price = candle["close"]
     changed = False
-
-    balance = get_usdt_balance(exchange)
 
     # ── 신규 진입 ────────────────────────────────────────────
     usdt_0 = balance * MARTINGALE_PCTS[0]
@@ -241,8 +233,8 @@ def run(exchange: ccxt.binanceusdm, dry_run: bool = False):
 
             # ── 지표 계산 ──────────────────────────────────
             precompute_vol_avg(candles, window=20)
-            ema50  = _precompute_ema(candles, 50)
-            ema200 = _precompute_ema(candles, 200)
+            ema50  = precompute_ema(candles, 50)
+            ema200 = precompute_ema(candles, 200)
 
             # 마지막 완성 캔들 기준
             idx    = len(candles) - 1
@@ -296,7 +288,7 @@ def run(exchange: ccxt.binanceusdm, dry_run: bool = False):
                 continue
 
             changed = _handle_signal(
-                exchange, sig, reason, state, candle, candles, idx
+                exchange, sig, reason, state, candle, candles, idx, balance
             )
             if changed:
                 save_state(state)
