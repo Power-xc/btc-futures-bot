@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+*.egg-info/
+
+# 환경 설정 (API 키 포함)
+.env
+config/settings.py
+
+# 데이터 캐시 (용량 큼)
+data/historical/
+
+# 결과 파일
+results/
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.DS_Store

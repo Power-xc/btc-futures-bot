@@ -1,0 +1,9 @@
+ccxt>=4.3.0
+pandas
+numpy
+python-dotenv
+matplotlib
+requests
+schedule
+colorlog
+tabulate
