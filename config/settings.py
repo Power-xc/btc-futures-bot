@@ -9,9 +9,6 @@ def get_api_credentials():
         "api_secret": os.getenv("BINANCE_API_SECRET", ""),
     }
 
-def is_testnet():
-    return os.getenv("USE_TESTNET", "true").lower() == "true"
-
 def get_telegram_credentials():
     return {
         "token":   os.getenv("TELEGRAM_TOKEN", ""),

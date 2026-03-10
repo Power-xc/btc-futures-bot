@@ -97,13 +97,11 @@ def notify_error(error: str):
     _send(f"⚠️ <b>오류 발생</b>\n{error[:300]}")
 
 
-def notify_start(testnet: bool, dry_run: bool):
+def notify_start(dry_run: bool = False):
     """봇 시작 알림"""
-    mode = "테스트넷" if testnet else "★ 실거래 ★"
-    dr   = " [DRY RUN]" if dry_run else ""
+    dr = " [DRY RUN]" if dry_run else ""
     _send(
-        f"🤖 <b>BTC 선물봇 시작</b>\n"
-        f"모드: {mode}{dr}\n"
+        f"🤖 <b>BTC 선물봇 시작</b>{dr}\n"
         f"시각: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
     )
 

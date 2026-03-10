@@ -208,8 +208,7 @@ def run(exchange: ccxt.binanceusdm, dry_run: bool = False):
     logger.info(f"  {'[DRY RUN]' if dry_run else '[실거래 모드]'}")
     logger.info("=" * 60)
 
-    from config.settings import is_testnet
-    tg.notify_start(is_testnet(), dry_run)
+    tg.notify_start(dry_run)
 
     # 시작 초기화
     if not dry_run:

@@ -23,7 +23,7 @@ FUTURES_SYMBOL = "BTC/USDT:USDT"   # ccxt USD-M Futures 심볼 형식
 
 
 def create_client() -> ccxt.binanceusdm:
-    """Binance USD-M Futures 클라이언트 생성"""
+    """Binance USD-M Futures 클라이언트 생성 (실거래 API)"""
     creds = get_api_credentials()
     exchange = ccxt.binanceusdm({
         "apiKey":          creds["api_key"],
@@ -33,11 +33,7 @@ def create_client() -> ccxt.binanceusdm:
             "adjustForTimeDifference": True,
         },
     })
-    if is_testnet():
-        exchange.set_sandbox_mode(True)
-        logger.info("[클라이언트] 테스트넷 모드")
-    else:
-        logger.info("[클라이언트] 실거래 모드 ★")
+    logger.info("[클라이언트] Binance USD-M Futures 연결")
     return exchange
 
 
