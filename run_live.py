@@ -47,6 +47,10 @@ def main():
         "--verbose", action="store_true",
         help="디버그 로그 출력",
     )
+    parser.add_argument(
+        "--yes", action="store_true",
+        help="실거래 확인 프롬프트 생략 (systemd 등 비대화형 환경용)",
+    )
     args = parser.parse_args()
 
     setup_logging(args.verbose)
@@ -57,7 +61,7 @@ def main():
     logger.info(f"  {'[DRY RUN] 주문 없음' if args.dry_run else '★ 실거래 — 실제 주문 실행 ★'}")
     logger.info("=" * 60)
 
-    if not args.dry_run:
+    if not args.dry_run and not args.yes:
         confirm = input("\n★ 실제 주문이 실행됩니다. 계속하시겠습니까? (yes 입력): ")
         if confirm.strip().lower() != "yes":
             logger.info("취소됨.")
