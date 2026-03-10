@@ -29,7 +29,7 @@ from strategy.signals import generate_signal, Signal
 from lib.volume import precompute_vol_avg
 from config.constants import (
     LEVERAGE, BACKTEST_MIN_CANDLES, BACKTEST_WINDOW_SIZE,
-    MARTINGALE_AMOUNTS, MAX_MARTINGALE_LEVEL,
+    MARTINGALE_PCTS, MAX_MARTINGALE_LEVEL,
     TREND_LONG_MIN_STOP_PCT,
 )
 
@@ -104,67 +104,71 @@ def _handle_signal(exchange: ccxt.binanceusdm,
     balance = get_usdt_balance(exchange)
 
     # ── 신규 진입 ────────────────────────────────────────────
+    usdt_0 = balance * MARTINGALE_PCTS[0]
+
     if sig == Signal.ENTER_CONTRARIAN_SHORT and not state.is_open():
         order = enter_short(exchange, price, level=0)
         if order:
-            qty = float(order.get("filled", 0) or MARTINGALE_AMOUNTS[0] / price)
+            qty = float(order.get("filled", 0) or usdt_0 / price)
             state.position_side    = "CONTRARIAN_SHORT"
             state.martingale_level = 1
             state.entries.clear()
-            state.add_entry(price, MARTINGALE_AMOUNTS[0], qty)
+            state.add_entry(price, usdt_0, qty)
             changed = True
             logger.info(f"[시그널] {reason}")
-            tg.notify_enter("CONTRARIAN_SHORT", 1, price, MARTINGALE_AMOUNTS[0], balance)
+            tg.notify_enter("CONTRARIAN_SHORT", 1, price, usdt_0, balance)
 
     elif sig == Signal.ENTER_CONTRARIAN_LONG and not state.is_open():
         order = enter_long(exchange, price, level=0)
         if order:
-            qty = float(order.get("filled", 0) or MARTINGALE_AMOUNTS[0] / price)
+            qty = float(order.get("filled", 0) or usdt_0 / price)
             state.position_side    = "CONTRARIAN_LONG"
             state.martingale_level = 1
             state.entries.clear()
-            state.add_entry(price, MARTINGALE_AMOUNTS[0], qty)
+            state.add_entry(price, usdt_0, qty)
             changed = True
             logger.info(f"[시그널] {reason}")
-            tg.notify_enter("CONTRARIAN_LONG", 1, price, MARTINGALE_AMOUNTS[0], balance)
+            tg.notify_enter("CONTRARIAN_LONG", 1, price, usdt_0, balance)
 
     elif sig == Signal.ENTER_TREND_LONG and not state.is_open():
         order = enter_long(exchange, price, level=0)
         if order:
-            qty = float(order.get("filled", 0) or MARTINGALE_AMOUNTS[0] / price)
+            qty = float(order.get("filled", 0) or usdt_0 / price)
             state.position_side    = "TREND_LONG"
             state.martingale_level = 1
             state.entries.clear()
-            state.add_entry(price, MARTINGALE_AMOUNTS[0], qty)
+            state.add_entry(price, usdt_0, qty)
             ref = candles[max(0, idx - 2)]
             min_stop = price * (1 - TREND_LONG_MIN_STOP_PCT)
             state.trend_long_stop = min(ref["low"], min_stop)
             changed = True
             logger.info(f"[시그널] {reason} | 손절: ${state.trend_long_stop:,.0f}")
-            tg.notify_enter("TREND_LONG", 1, price, MARTINGALE_AMOUNTS[0], balance)
+            tg.notify_enter("TREND_LONG", 1, price, usdt_0, balance)
 
     # ── 추매 ─────────────────────────────────────────────────
     elif sig == Signal.ADD_SHORT and state.position_side == "CONTRARIAN_SHORT":
         if state.martingale_level < MAX_MARTINGALE_LEVEL:
             lv = state.martingale_level
+            usdt_lv = balance * MARTINGALE_PCTS[lv]
             order = enter_short(exchange, price, level=lv)
             if order:
-                qty = float(order.get("filled", 0) or MARTINGALE_AMOUNTS[lv] / price)
-                state.add_entry(price, MARTINGALE_AMOUNTS[lv], qty)
+                qty = float(order.get("filled", 0) or usdt_lv / price)
+                state.add_entry(price, usdt_lv, qty)
                 state.martingale_level += 1
                 changed = True
-                tg.notify_enter("CONTRARIAN_SHORT", lv + 1, price, MARTINGALE_AMOUNTS[lv], balance)
+                tg.notify_enter("CONTRARIAN_SHORT", lv + 1, price, usdt_lv, balance)
 
     elif sig == Signal.ADD_LONG and state.position_side == "CONTRARIAN_LONG":
         if state.martingale_level < MAX_MARTINGALE_LEVEL:
             lv = state.martingale_level
+            usdt_lv = balance * MARTINGALE_PCTS[lv]
             order = enter_long(exchange, price, level=lv)
             if order:
-                qty = float(order.get("filled", 0) or MARTINGALE_AMOUNTS[lv] / price)
-                state.add_entry(price, MARTINGALE_AMOUNTS[lv], qty)
+                qty = float(order.get("filled", 0) or usdt_lv / price)
+                state.add_entry(price, usdt_lv, qty)
                 state.martingale_level += 1
                 changed = True
-                tg.notify_enter("CONTRARIAN_LONG", lv + 1, price, MARTINGALE_AMOUNTS[lv], balance)
+                tg.notify_enter("CONTRARIAN_LONG", lv + 1, price, usdt_lv, balance)
 
     # ── 분할 익절 ─────────────────────────────────────────────
     elif sig == Signal.PARTIAL_CLOSE and state.is_open():

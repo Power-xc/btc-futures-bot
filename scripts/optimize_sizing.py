@@ -83,7 +83,7 @@ print(f"""
   Half Kelly  = {kelly_half:.1f}%  → (권장: 변동성 절반)
   1/4 Kelly   = {kelly_quarter:.1f}%  → (보수적)
 
-  현재 첫 진입   = $15 / $1000 = 1.5%  (Kelly의 {1.5/kelly_full*100:.0f}%)
+  현재 첫 진입   = 잔고 × 1.009% (65% 비율 복리, Kelly의 {1.009/kelly_full*100:.0f}%)
   → Full Kelly 기준 첫 진입: ${INITIAL * kelly_full / 100:.0f}
   → Half Kelly 기준 첫 진입: ${INITIAL * kelly_half / 100:.0f}
 """)
@@ -101,36 +101,24 @@ for lev in [5, 10, 15, 20, 25, 30, 40]:
 best_lev = max(lev_results, key=lambda x: x[0] if x[2]["mdd"] < 80 else -999)
 print(f"\n  → 최적 레버리지 = {best_lev[1]}x  (score={best_lev[0]:.4f})")
 
-# ── 3. 마틴게일 배수 최적화 ───────────────────────────────
+# ── 3. 마틴게일 총 노출 비율 최적화 ──────────────────────
 print("\n" + "=" * 100)
-print("  [3] 마틴게일 배수 최적화 (레버리지 20x, 첫 진입금액 변화)")
+print("  [3] 마틴게일 총 노출 비율 최적화 (레버리지 20x, ×2.5 배수 유지)")
 print("=" * 100)
 
-
-def make_amounts(start, mult, levels=5):
-    amounts = [start]
-    for _ in range(levels - 1):
-        amounts.append(round(amounts[-1] * mult))
-    return amounts
-
+RATIO_SUM = 1 + 2.5 + 6.25 + 15.625 + 39.0625   # 64.4375
 
 mart_results = []
-for start in [15, 20, 25, 30]:
-    for mult in [1.5, 2.0, 2.5, 3.0]:
-        import config.constants as C_mod
-        import backtest.engine as eng
-        amounts = make_amounts(start, mult)
-        orig = C_mod.MARTINGALE_AMOUNTS
-        C_mod.MARTINGALE_AMOUNTS = amounts
-        eng.MARTINGALE_AMOUNTS   = amounts
-        m = run(C7, f"  시작${start} x{mult:.1f} = {amounts}", leverage=20)
-        C_mod.MARTINGALE_AMOUNTS = orig
-        eng.MARTINGALE_AMOUNTS   = orig
-        print_row(f"  ${start} x{mult} → {amounts}", m)
-        mart_results.append((m["score"], start, mult, amounts, m))
+for total_pct in [0.30, 0.40, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90]:
+    x = total_pct / RATIO_SUM
+    pcts = [x, x*2.5, x*6.25, x*15.625, x*39.0625]
+    m = run(C7, f"  총노출 {total_pct*100:.0f}%", leverage=20, martingale_pcts=pcts)
+    mark = " [현재 65%]" if total_pct == 0.65 else ""
+    print_row(f"  총노출 {total_pct*100:.0f}% [{'/'.join(f'{p*100:.2f}%' for p in pcts)}]", m, mark)
+    mart_results.append((m["score"], total_pct, pcts, m))
 
-best_mart = max(mart_results, key=lambda x: x[0] if x[4]["mdd"] < 80 else -999)
-print(f"\n  → 최적 마틴게일: ${best_mart[1]} x{best_mart[2]} = {best_mart[3]}  (score={best_mart[0]:.4f})")
+best_mart = max(mart_results, key=lambda x: x[0] if x[3]["mdd"] < 80 else -999)
+print(f"\n  → 최적 총노출: {best_mart[1]*100:.0f}%  (score={best_mart[0]:.4f})")
 
 # ── 4. 복리 (자본비율) vs 고정금액 ───────────────────────
 print("\n" + "=" * 100)
@@ -142,7 +130,7 @@ kh = kelly_half    / 100
 kq = kelly_quarter / 100
 
 compound_configs = [
-    ("고정 $15/$38/$95/$238/$595 [현재]",              None),
+    ("복리 65% [현재 채택]",                            [0.01009, 0.02523, 0.06307, 0.15768, 0.39420]),
     (f"복리 2%/4%/8%/16%/30% (현재 수준)",              [0.020, 0.040, 0.080, 0.160, 0.300]),
     (f"복리 1/4Kelly ({kq*100:.1f}%  x2배수)",          [kq, kq*2, kq*4, kq*8, kq*15]),
     (f"복리 1/2Kelly ({kh*100:.1f}%  x2배수)",          [kh, kh*2, kh*4, kh*8, kh*15]),
@@ -198,4 +186,4 @@ print()
 print("=" * 100)
 print("  기준선 (현재 설정)")
 print("=" * 100)
-print_row("  현재 레버리지20x 고정$15/$38/$95/$238/$595", base_m, " [현재]")
+print_row("  현재 레버리지20x 복리 65%", base_m, " [현재]")

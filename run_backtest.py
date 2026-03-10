@@ -44,10 +44,10 @@ def main():
     logger.info("=" * 60)
     logger.info("  BTC 선물 백테스트 — 역추세(숏/롱) + 추세 롱 전략")
     logger.info(f"  기간: {args.start} ~ {args.end} | 봉: {args.tf}")
-    from config.constants import LEVERAGE, MARTINGALE_AMOUNTS
-    mart_str = "/".join(f"${a}" for a in MARTINGALE_AMOUNTS)
+    from config.constants import LEVERAGE, MARTINGALE_PCTS
+    mart_str = "/".join(f"{p*100:.1f}%" for p in MARTINGALE_PCTS)
     logger.info(f"  초기 자본: ${args.capital:,.0f} | 레버리지: {LEVERAGE}x")
-    logger.info(f"  마틴게일: {mart_str} (×2.5배수)")
+    logger.info(f"  마틴게일: [{mart_str}] (합계≈65%, 현재 자본 기준 복리)")
     logger.info("=" * 60)
 
     df = fetch_historical_data(

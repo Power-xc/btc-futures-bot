@@ -2,8 +2,8 @@
 주문 실행 레이어 — 전략 시그널을 실제 바이낸스 주문으로 변환
 
 백테스트 engine.py와 동일한 마틴게일 로직 적용:
-  1차 진입: MARTINGALE_AMOUNTS[0] USDT
-  추매    : MARTINGALE_AMOUNTS[level] USDT
+  1차 진입: 잔고 × MARTINGALE_PCTS[0] USDT (복리)
+  추매    : 잔고 × MARTINGALE_PCTS[level] USDT (복리)
   청산    : reduceOnly 시장가
 """
 import logging
