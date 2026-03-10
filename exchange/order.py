@@ -13,7 +13,7 @@ from exchange.client import (
     place_market_order, get_usdt_balance,
     get_position, close_all_positions,
 )
-from config.constants import MARTINGALE_AMOUNTS, MAX_MARTINGALE_LEVEL, PARTIAL_CLOSE_RATIO
+from config.constants import MARTINGALE_PCTS, MAX_MARTINGALE_LEVEL, PARTIAL_CLOSE_RATIO
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +32,16 @@ def enter_long(exchange: ccxt.binanceusdm,
         logger.warning(f"[진입] 최대 마틴게일 레벨 초과 ({level})")
         return None
 
-    usdt = MARTINGALE_AMOUNTS[level]
     balance = get_usdt_balance(exchange)
+    usdt = balance * MARTINGALE_PCTS[level]
 
-    if balance < usdt:
-        logger.warning(f"[진입] 잔고 부족 (필요: ${usdt}, 보유: ${balance:.0f}) → 건너뜀")
+    if usdt > balance * 0.95:
+        logger.warning(f"[진입] 잔고 부족 (필요: ${usdt:.0f}, 보유: ${balance:.0f}) → 건너뜀")
         return None
 
     order = place_market_order(exchange, "buy", usdt, current_price)
     if order:
-        logger.info(f"[롱 진입] {level+1}차 | ${usdt} | 현재가: ${current_price:,.0f}")
+        logger.info(f"[롱 진입] {level+1}차 | ${usdt:.0f} ({MARTINGALE_PCTS[level]*100:.1f}%) | 현재가: ${current_price:,.0f}")
     return order
 
 
@@ -59,16 +59,16 @@ def enter_short(exchange: ccxt.binanceusdm,
         logger.warning(f"[진입] 최대 마틴게일 레벨 초과 ({level})")
         return None
 
-    usdt = MARTINGALE_AMOUNTS[level]
     balance = get_usdt_balance(exchange)
+    usdt = balance * MARTINGALE_PCTS[level]
 
-    if balance < usdt:
-        logger.warning(f"[진입] 잔고 부족 (필요: ${usdt}, 보유: ${balance:.0f}) → 건너뜀")
+    if usdt > balance * 0.95:
+        logger.warning(f"[진입] 잔고 부족 (필요: ${usdt:.0f}, 보유: ${balance:.0f}) → 건너뜀")
         return None
 
     order = place_market_order(exchange, "sell", usdt, current_price)
     if order:
-        logger.info(f"[숏 진입] {level+1}차 | ${usdt} | 현재가: ${current_price:,.0f}")
+        logger.info(f"[숏 진입] {level+1}차 | ${usdt:.0f} ({MARTINGALE_PCTS[level]*100:.1f}%) | 현재가: ${current_price:,.0f}")
     return order
 
 

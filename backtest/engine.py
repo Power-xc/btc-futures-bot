@@ -10,7 +10,7 @@ from datetime import datetime
 
 from strategy.signals import generate_signal, Signal
 from config.constants import (
-    MARTINGALE_AMOUNTS, MAX_MARTINGALE_LEVEL, LEVERAGE,
+    MARTINGALE_PCTS, MAX_MARTINGALE_LEVEL, LEVERAGE,
     BACKTEST_TAKER_FEE, BACKTEST_SLIPPAGE, INITIAL_CAPITAL,
     BACKTEST_MIN_CANDLES, BACKTEST_WINDOW_SIZE,
     PARTIAL_CLOSE_RATIO, MAX_ENTRY_CAPITAL_RATIO,
@@ -27,8 +27,7 @@ def run_backtest(
     initial_capital: float = INITIAL_CAPITAL,
     vol_avg_window: int = 20,
     leverage: int = LEVERAGE,
-    martingale_pcts: list = None,   # [0.02, 0.04, 0.08, 0.16, 0.30] 식으로 자본 대비 비율 지정
-                                    # None 이면 constants.MARTINGALE_AMOUNTS 고정금액 사용
+    martingale_pcts: list = None,   # 기본값: constants.MARTINGALE_PCTS (65% 비율 복리)
 ):
     """
     Returns:
@@ -63,10 +62,8 @@ def run_backtest(
 
     def _add_entry(price: float, level: int) -> bool:
         """잔고 부족 시 진입 거부. Returns True if entry succeeded."""
-        if martingale_pcts is not None:
-            usdt = capital * martingale_pcts[level]   # 복리: 현재 자본 비율
-        else:
-            usdt = MARTINGALE_AMOUNTS[level]          # 고정금액 (기본)
+        pcts = martingale_pcts if martingale_pcts is not None else MARTINGALE_PCTS
+        usdt = capital * pcts[level]   # 현재 자본 기준 복리
         if usdt > capital * MAX_ENTRY_CAPITAL_RATIO:
             logger.debug(f"  잔고 부족 → {level+1}차 진입 건너뜀 (잔고: ${capital:.0f}, 필요: ${usdt:.0f})")
             return False
