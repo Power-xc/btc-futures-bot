@@ -17,6 +17,8 @@ from datetime import datetime, timezone, timedelta, date
 import ccxt
 
 import notifications.telegram as tg
+from core.stats import load_stats, record_trade
+from notifications.commands import CommandPoller
 from exchange.client import (
     create_client, check_connection,
     set_leverage, set_margin_mode,
@@ -85,11 +87,19 @@ def _send_morning_report(exchange: ccxt.binanceusdm, state: PositionState):
     else:
         pos_text = "📌 포지션: 없음"
 
+    s = load_stats()
+    total = s["total_trades"]
+    wins  = s["wins"]
+    rate  = f"{wins/total*100:.0f}%" if total > 0 else "—"
+
     from notifications.telegram import _send
     _send(
         f"☀️ <b>아침 보고</b>  {now_kst.strftime('%Y-%m-%d %H:%M')} KST\n"
         f"잔고: <b>${balance:.2f}</b>\n"
-        f"{pos_text}"
+        f"{pos_text}\n"
+        f"오늘 PnL: {'+'if s['today_pnl']>=0 else ''}{s['today_pnl']:.2f}$ | "
+        f"누적: {'+'if s['total_pnl']>=0 else ''}{s['total_pnl']:.2f}$\n"
+        f"총 거래: {total}회 | 승률: {rate}"
     )
 
 
@@ -213,6 +223,7 @@ def _handle_signal(exchange: ccxt.binanceusdm,
         pnl_est = (price - avg) * state.total_qty() if is_long else (avg - price) * state.total_qty()
         close_full(exchange, price, reason)
         tg.notify_close(state.position_side, avg, price, pnl_est, balance, reason)
+        record_trade(pnl_est)
         state.reset()
         clear_state()
         changed = True
@@ -238,6 +249,46 @@ def run(exchange: ccxt.binanceusdm, dry_run: bool = False):
     tg.notify_start(dry_run)
 
     last_report_date: date = None  # 오늘 보고 여부 추적
+
+    # ── 텔레그램 명령어 폴러 시작 ──────────────────────────────
+    from config.settings import get_telegram_credentials
+    _creds = get_telegram_credentials()
+
+    def _handle_command(cmd: str) -> str:
+        bal = get_usdt_balance(exchange)
+        now = datetime.now(KST).strftime("%H:%M KST")
+        if cmd == "/status":
+            if state.is_open():
+                real_pos = get_position(exchange)
+                price = float(real_pos.get("markPrice", 0)) if real_pos else 0
+                is_long = state.position_side in ("CONTRARIAN_LONG", "TREND_LONG")
+                pnl = (price - state.avg_price()) * state.total_qty() if is_long \
+                      else (state.avg_price() - price) * state.total_qty()
+                label = {"CONTRARIAN_SHORT": "역추세 숏", "CONTRARIAN_LONG": "역추세 롱",
+                         "TREND_LONG": "추세 롱"}.get(state.position_side, state.position_side)
+                return (
+                    f"📊 <b>현재 상태</b>  {now}\n"
+                    f"잔고: <b>${bal:.2f}</b>\n"
+                    f"📌 {label} (lv.{state.martingale_level})\n"
+                    f"평균가: ${state.avg_price():,.0f} | 현재가: ${price:,.0f}\n"
+                    f"미실현 PnL: {'+'if pnl>=0 else ''}{pnl:.2f}$"
+                )
+            return f"📊 <b>현재 상태</b>  {now}\n잔고: <b>${bal:.2f}</b>\n📌 포지션: 없음"
+        if cmd == "/pnl":
+            s = load_stats()
+            total = s["total_trades"]
+            wins  = s["wins"]
+            rate  = f"{wins/total*100:.0f}%" if total > 0 else "—"
+            return (
+                f"💰 <b>손익 현황</b>  {now}\n"
+                f"오늘: {'+'if s['today_pnl']>=0 else ''}{s['today_pnl']:.2f}$\n"
+                f"누적: {'+'if s['total_pnl']>=0 else ''}{s['total_pnl']:.2f}$\n"
+                f"총 거래: {total}회 | 승률: {rate}"
+            )
+        return ""
+
+    if _creds["token"] and _creds["chat_id"]:
+        CommandPoller(_creds["token"], _creds["chat_id"], _handle_command).start()
 
     # 시작 초기화
     if not dry_run:
@@ -289,6 +340,7 @@ def run(exchange: ccxt.binanceusdm, dry_run: bool = False):
                     close_full(exchange, price, "trend_stop_loss")
                     tg.notify_close("TREND_LONG", avg, price, pnl_est,
                                     get_usdt_balance(exchange), "손절")
+                    record_trade(pnl_est)
                     state.reset()
                     clear_state()
                 else:
