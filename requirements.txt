@@ -7,3 +7,4 @@ requests
 schedule
 colorlog
 tabulate
+python-telegram-bot>=20.0   # 텔레그램 알림 (선택)
