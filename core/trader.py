@@ -12,7 +12,7 @@
 """
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, date
 
 import ccxt
 
@@ -40,6 +40,8 @@ CANDLE_LIMIT      = 300     # 로드할 캔들 수 (EMA200 + 여유분)
 TIMEFRAME         = "5m"
 POLL_INTERVAL_SEC = 10      # 캔들 마감 체크 주기 (초)
 CANDLE_SEC        = 300     # 5분봉 = 300초
+KST               = timezone(timedelta(hours=9))
+DAILY_REPORT_HOUR = 9       # 매일 오전 9시 KST
 
 
 def _candle_close_time_sec(now_sec: int) -> int:
@@ -60,6 +62,35 @@ def _is_macro_downtrend(candles: list, idx: int,
                         ema50: list, ema200: list) -> bool:
     return (candles[idx]["close"] < ema50[idx]
             and ema50[idx] < ema200[idx])
+
+
+def _send_morning_report(exchange: ccxt.binanceusdm, state: PositionState):
+    """매일 오전 9시 KST 현황 보고"""
+    balance = get_usdt_balance(exchange)
+    now_kst = datetime.now(KST)
+
+    if state.is_open():
+        real_pos = get_position(exchange)
+        price = float(real_pos.get("markPrice", 0)) if real_pos else 0
+        is_long = state.position_side in ("CONTRARIAN_LONG", "TREND_LONG")
+        pnl_est = (price - state.avg_price()) * state.total_qty() if is_long \
+                  else (state.avg_price() - price) * state.total_qty()
+        label = {"CONTRARIAN_SHORT": "역추세 숏", "CONTRARIAN_LONG": "역추세 롱",
+                 "TREND_LONG": "추세 롱"}.get(state.position_side, state.position_side)
+        pos_text = (
+            f"📌 포지션: {label} (lv.{state.martingale_level})\n"
+            f"평균가: ${state.avg_price():,.0f} | 현재가: ${price:,.0f}\n"
+            f"미실현 PnL: {'+'if pnl_est>=0 else ''}{pnl_est:.2f}$"
+        )
+    else:
+        pos_text = "📌 포지션: 없음"
+
+    from notifications.telegram import _send
+    _send(
+        f"☀️ <b>아침 보고</b>  {now_kst.strftime('%Y-%m-%d %H:%M')} KST\n"
+        f"잔고: <b>${balance:.2f}</b>\n"
+        f"{pos_text}"
+    )
 
 
 def _log_status(state: PositionState, balance: float, price: float):
@@ -206,6 +237,8 @@ def run(exchange: ccxt.binanceusdm, dry_run: bool = False):
 
     tg.notify_start(dry_run)
 
+    last_report_date: date = None  # 오늘 보고 여부 추적
+
     # 시작 초기화
     if not dry_run:
         set_margin_mode(exchange)
@@ -277,6 +310,13 @@ def run(exchange: ccxt.binanceusdm, dry_run: bool = False):
             ts_str = datetime.fromtimestamp(candle["timestamp"] / 1000).strftime("%m/%d %H:%M")
             balance = get_usdt_balance(exchange)
             _log_status(state, balance, price)
+
+            # ── 아침 9시 KST 보고 ──────────────────────────
+            now_kst = datetime.now(KST)
+            if (now_kst.hour == DAILY_REPORT_HOUR
+                    and last_report_date != now_kst.date()):
+                _send_morning_report(exchange, state)
+                last_report_date = now_kst.date()
             logger.info(f"[{ts_str}] 시그널: {sig.value} — {reason}")
 
             # ── 주문 실행 ──────────────────────────────────
