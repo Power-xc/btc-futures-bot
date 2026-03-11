@@ -14,6 +14,7 @@ def is_testnet() -> bool:
 
 def get_telegram_credentials():
     return {
-        "token":   os.getenv("TELEGRAM_TOKEN", ""),
-        "chat_id": os.getenv("TELEGRAM_CHAT_ID", ""),
+        "token":     os.getenv("TELEGRAM_TOKEN", ""),
+        "chat_id":   os.getenv("TELEGRAM_CHAT_ID", ""),
+        "chat_id_2": os.getenv("TELEGRAM_CHAT_ID_2", ""),
     }
