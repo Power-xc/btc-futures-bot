@@ -73,10 +73,8 @@ def _send_morning_report(exchange: ccxt.binanceusdm, state: PositionState):
 
     if state.is_open():
         real_pos = get_position(exchange)
-        price = float(real_pos.get("markPrice", 0)) if real_pos else 0
-        is_long = state.position_side in ("CONTRARIAN_LONG", "TREND_LONG")
-        pnl_est = (price - state.avg_price()) * state.total_qty() if is_long \
-                  else (state.avg_price() - price) * state.total_qty()
+        price   = float(real_pos["notional"] / real_pos["qty"]) if real_pos and real_pos["qty"] else 0
+        pnl_est = float(real_pos["unrealized_pnl"]) if real_pos else 0
         label = {"CONTRARIAN_SHORT": "역추세 숏", "CONTRARIAN_LONG": "역추세 롱",
                  "TREND_LONG": "추세 롱"}.get(state.position_side, state.position_side)
         pos_text = (
