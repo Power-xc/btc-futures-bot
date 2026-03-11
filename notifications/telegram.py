@@ -125,7 +125,7 @@ def notify_morning_report(equity: float, daily_pnl: float, trade_count: int) -> 
     kst = (datetime.now(timezone.utc) + timedelta(hours=9)).strftime("%m/%d %H:%M")
     pnl_str = f"+${daily_pnl:,.2f}" if daily_pnl >= 0 else f"-${abs(daily_pnl):,.2f}"
     _send(
-        f"☀️ <b>아침 보고 (BTC봇)</b>  {kst} KST\n"
+        f"☀️ <b>아침 보고 [BTC봇]</b>  {kst} KST\n"
         f"잔고: <b>${equity:,.0f}</b>  |  오늘 PnL: {pnl_str} ({trade_count}회)"
     )
 
