@@ -10,9 +10,14 @@ requests로 Bot API 직접 호출 (python-telegram-bot 불필요, 간단하고 �
   4. .env 파일에 TELEGRAM_TOKEN, TELEGRAM_CHAT_ID 입력
 """
 import logging
-import os
 import requests
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+KST = timedelta(hours=9)
+
+
+def _now_kst() -> str:
+    return (datetime.now(timezone.utc) + KST).strftime("%m/%d %H:%M")
 
 from config.settings import get_telegram_credentials
 
@@ -110,22 +115,20 @@ def notify_start(dry_run: bool = False):
     dr = " [DRY RUN]" if dry_run else ""
     _send(
         f"🤖 <b>BTC 선물봇 시작</b>{dr}\n"
-        f"시각: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        f"{_now_kst()} KST"
     )
 
 
 def notify_stop():
     """봇 종료 알림"""
-    _send(f"🔌 BTC 선물봇 종료 ({datetime.now().strftime('%H:%M')})")
+    _send(f"🔌 BTC 선물봇 종료 ({_now_kst()} KST)")
 
 
 def notify_morning_report(equity: float, daily_pnl: float, trade_count: int) -> None:
     """매일 오전 9시 KST 현황 보고"""
-    from datetime import timezone, timedelta
-    kst = (datetime.now(timezone.utc) + timedelta(hours=9)).strftime("%m/%d %H:%M")
     pnl_str = f"+${daily_pnl:,.2f}" if daily_pnl >= 0 else f"-${abs(daily_pnl):,.2f}"
     _send(
-        f"☀️ <b>아침 보고 [BTC봇]</b>  {kst} KST\n"
+        f"☀️ <b>아침 보고 [BTC봇]</b>  {_now_kst()} KST\n"
         f"잔고: <b>${equity:,.0f}</b>  |  오늘 PnL: {pnl_str} ({trade_count}회)"
     )
 
