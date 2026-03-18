@@ -53,9 +53,12 @@ class CommandPoller(threading.Thread):
                 for update in data.get("result", []):
                     self.offset = update["update_id"] + 1
                     msg = update.get("message", {})
-                    if str(msg.get("chat", {}).get("id")) != self.chat_id:
-                        continue
+                    incoming_id = str(msg.get("chat", {}).get("id", ""))
                     text = msg.get("text", "").strip()
+                    logger.info(f"[커맨드봇] 수신: chat_id={incoming_id} text={text!r}")
+                    if incoming_id != self.chat_id:
+                        logger.warning(f"[커맨드봇] chat_id 불일치: {incoming_id} != {self.chat_id}")
+                        continue
                     if not text:
                         continue
                     # /status@botname 형식도 처리
