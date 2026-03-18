@@ -286,7 +286,10 @@ def run(exchange: ccxt.binanceusdm, dry_run: bool = False):
         return ""
 
     if _creds["token"] and _creds["chat_id"]:
-        CommandPoller(_creds["token"], _creds["chat_id"], _handle_command).start()
+        CommandPoller(
+            _creds["token"], _creds["chat_id"], _handle_command,
+            extra_chat_id=_creds.get("chat_id_2", ""),
+        ).start()
 
     # 시작 초기화
     if not dry_run:

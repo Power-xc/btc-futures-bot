@@ -19,13 +19,16 @@ KST = timezone(timedelta(hours=9))
 
 
 class CommandPoller(threading.Thread):
-    def __init__(self, token: str, chat_id: str, get_reply_fn: Callable[[str], str]):
+    def __init__(self, token: str, chat_id: str, get_reply_fn: Callable[[str], str],
+                 extra_chat_id: str = ""):
         super().__init__(daemon=True, name="TelegramCommands")
-        self.token       = token
-        self.chat_id     = str(chat_id)
-        self.get_reply   = get_reply_fn
-        self.offset      = 0
-        self._base       = f"https://api.telegram.org/bot{token}"
+        self.token      = token
+        self.allowed    = {str(chat_id)}
+        if extra_chat_id:
+            self.allowed.add(str(extra_chat_id))
+        self.get_reply  = get_reply_fn
+        self.offset     = 0
+        self._base      = f"https://api.telegram.org/bot{token}"
 
     def _send(self, text: str):
         try:
@@ -56,8 +59,8 @@ class CommandPoller(threading.Thread):
                     incoming_id = str(msg.get("chat", {}).get("id", ""))
                     text = msg.get("text", "").strip()
                     logger.info(f"[커맨드봇] 수신: chat_id={incoming_id} text={text!r}")
-                    if incoming_id != self.chat_id:
-                        logger.warning(f"[커맨드봇] chat_id 불일치: {incoming_id} != {self.chat_id}")
+                    if incoming_id not in self.allowed:
+                        logger.warning(f"[커맨드봇] chat_id 불일치: {incoming_id}")
                         continue
                     if not text:
                         continue
