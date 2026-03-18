@@ -46,17 +46,28 @@ class CommandPoller(threading.Thread):
                     params={"offset": self.offset, "timeout": 30},
                     timeout=35,
                 )
-                for update in resp.json().get("result", []):
+                data = resp.json()
+                if not data.get("ok"):
+                    time.sleep(5)
+                    continue
+                for update in data.get("result", []):
                     self.offset = update["update_id"] + 1
                     msg = update.get("message", {})
                     if str(msg.get("chat", {}).get("id")) != self.chat_id:
                         continue
-                    parts = msg.get("text", "").strip().split()
-                    if not parts:
+                    text = msg.get("text", "").strip()
+                    if not text:
                         continue
-                    cmd = parts[0].lower()
+                    # /status@botname 형식도 처리
+                    cmd = text.split()[0].split("@")[0].lower()
                     if cmd in ("/status", "/pnl"):
-                        self._send(self.get_reply(cmd))
+                        try:
+                            self._send(self.get_reply(cmd))
+                        except Exception as e:
+                            logger.warning(f"[커맨드봇] 응답 생성 실패: {e}")
+                            self._send("⚠️ 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
+            except requests.exceptions.Timeout:
+                pass  # 롱폴링 정상 타임아웃
             except Exception as e:
                 logger.warning(f"[커맨드봇] 폴링 오류: {e}")
                 time.sleep(5)
