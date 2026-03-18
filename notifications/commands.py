@@ -30,11 +30,11 @@ class CommandPoller(threading.Thread):
         self.offset     = 0
         self._base      = f"https://api.telegram.org/bot{token}"
 
-    def _send(self, text: str):
+    def _send(self, chat_id: str, text: str):
         try:
             requests.post(
                 f"{self._base}/sendMessage",
-                json={"chat_id": self.chat_id, "text": text, "parse_mode": "HTML"},
+                json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
                 timeout=5,
             )
         except Exception as e:
@@ -68,10 +68,10 @@ class CommandPoller(threading.Thread):
                     cmd = text.split()[0].split("@")[0].lower()
                     if cmd in ("/status", "/pnl"):
                         try:
-                            self._send(self.get_reply(cmd))
+                            self._send(incoming_id, self.get_reply(cmd))
                         except Exception as e:
                             logger.warning(f"[커맨드봇] 응답 생성 실패: {e}")
-                            self._send("⚠️ 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
+                            self._send(incoming_id, "⚠️ 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
             except requests.exceptions.Timeout:
                 pass  # 롱폴링 정상 타임아웃
             except Exception as e:
