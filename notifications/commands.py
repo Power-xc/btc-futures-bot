@@ -51,7 +51,10 @@ class CommandPoller(threading.Thread):
                     msg = update.get("message", {})
                     if str(msg.get("chat", {}).get("id")) != self.chat_id:
                         continue
-                    cmd = msg.get("text", "").strip().split()[0].lower()
+                    parts = msg.get("text", "").strip().split()
+                    if not parts:
+                        continue
+                    cmd = parts[0].lower()
                     if cmd in ("/status", "/pnl"):
                         self._send(self.get_reply(cmd))
             except Exception as e:
